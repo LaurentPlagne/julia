@@ -572,9 +572,9 @@ end
 # normalization of paths by include (#26424)
 @test begin
     exc = try include("./notarealfile.jl") ; catch exc ; exc ; end
-    exc isa SystemError &&
-        exc.prefix == "opening file \"$(joinpath(@__DIR__, "notarealfile.jl"))\""
-end
+    @test exc isa SystemError
+    exc.prefix
+end == "opening file \"$(joinpath(@__DIR__, "notarealfile.jl"))\""
 
 old_act_proj = Base.ACTIVE_PROJECT[]
 pushfirst!(LOAD_PATH, "@")
