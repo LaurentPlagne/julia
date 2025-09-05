@@ -6,6 +6,8 @@ using HiGHS: Highs_create, Highs_destroy, Highs_setBoolOptionValue, Highs_addCol
     Highs_passLp, kHighsMatrixFormatColwise, Highs_getModelStatus, Highs_changeColsCostBySet,
     Highs_changeCoeff, Highs_changeColsBoundsBySet
 using SparseArrays
+import HiGHS
+import MathOptInterface as MOI
 
 """
     solve_lp()
@@ -156,5 +158,62 @@ end
 println("Solving non-sparse LP:")
 # solve_lp()
 solve_sparse_lp()
+
+function solve_moi_lp()
+    optimizer = HiGHS.Optimizer()
+    MOI.set(optimizer, MOI.Silent(), true)
+
+    num_col = 6
+    num_row = 5
+
+    col_cost = [-1.0, -2.0, -3.0, -4.0, -5.0, -6.0]
+    col_lower = zeros(num_col)
+    col_upper = fill(Inf, num_col)
+
+    row_lower = -Inf * ones(num_row)
+    row_upper = [2.0, 2.0, 2.0, 2.0, 2.0]
+
+    A = sparse([1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
+               [1, 2, 2, 3, 3, 4, 4, 5, 5, 6],
+               [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
+
+    x = MOI.add_variables(optimizer, num_col)
+    for i in 1:num_col
+        MOI.add_constraint(optimizer, x[i], MOI.GreaterThan(col_lower[i]))
+        if col_upper[i] < Inf
+            MOI.add_constraint(optimizer, x[i], MOI.LessThan(col_upper[i]))
+        end
+    end
+
+    for i in 1:num_row
+        terms = MOI.ScalarAffineTerm{Float64}[]
+        for j in 1:num_col
+            if A[i, j] != 0
+                push!(terms, MOI.ScalarAffineTerm(A[i, j], x[j]))
+            end
+        end
+        if row_lower[i] > -Inf
+            MOI.add_constraint(optimizer, MOI.ScalarAffineFunction(terms, 0.0), MOI.GreaterThan(row_lower[i]))
+        end
+        if row_upper[i] < Inf
+            MOI.add_constraint(optimizer, MOI.ScalarAffineFunction(terms, 0.0), MOI.LessThan(row_upper[i]))
+        end
+    end
+
+    MOI.set(optimizer, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(),
+            MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(col_cost, x), 0.0))
+    MOI.set(optimizer, MOI.ObjectiveSense(), MOI.MIN_SENSE)
+
+    MOI.optimize!(optimizer)
+
+    col_value = MOI.get(optimizer, MOI.VariablePrimal(), x)
+
+    println("\nMOI LP solution:")
+    for i in 1:num_col
+        println("x[$i] = ", col_value[i])
+    end
+end
+
+solve_moi_lp()
 
 end # module
