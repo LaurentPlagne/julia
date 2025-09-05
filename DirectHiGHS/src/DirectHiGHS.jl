@@ -4,7 +4,7 @@ using HiGHS: Highs_create, Highs_destroy, Highs_setBoolOptionValue, Highs_addCol
     Highs_changeColIntegrality, Highs_changeObjectiveSense, Highs_getObjectiveSense,
     Highs_addRow, Highs_run, Highs_getSolution, kHighsObjSenseMinimize, kHighsVarTypeInteger,
     Highs_passLp, kHighsMatrixFormatColwise, Highs_getModelStatus, Highs_changeColsCostBySet,
-    Highs_changeCoeff
+    Highs_changeCoeff, Highs_changeColsBoundsBySet
 using SparseArrays
 
 """
@@ -51,6 +51,34 @@ end
     solve_sparse_lp()
 
 Solves a small sparse linear programming problem using the HiGHS C API.
+
+The problem is defined as:
+```math
+\\min \\sum_{i=1}^6 c_i x_i
+```
+subject to:
+```math
+A x \\le b
+```
+```math
+x \\ge 0
+```
+where:
+```math
+c = [-1, -2, -3, -4, -5, -6]
+```
+```math
+A = \\begin{pmatrix}
+1 & 1 & 0 & 0 & 0 & 0 \\\\
+0 & 1 & 1 & 0 & 0 & 0 \\\\
+0 & 0 & 1 & 1 & 0 & 0 \\\\
+0 & 0 & 0 & 1 & 1 & 0 \\\\
+0 & 0 & 0 & 0 & 1 & 1
+\\end{pmatrix}
+```
+```math
+b = [2, 2, 2, 2, 2]
+```
 """
 function solve_sparse_lp()
     highs = Highs_create()
@@ -104,6 +132,11 @@ function solve_sparse_lp()
     # Modify the problem
     new_costs = col_cost .+ rand(num_col) .* 2.0
     ret = Highs_changeColsCostBySet(highs, 6, Cint[0, 1, 2, 3, 4, 5], new_costs)
+    @assert ret == 0
+
+    new_lower = col_lower .+ rand(num_col) .* 0.5
+    new_upper = col_upper
+    ret = Highs_changeColsBoundsBySet(highs, 6, Cint[0, 1, 2, 3, 4, 5], new_lower, new_upper)
     @assert ret == 0
 
     ret = Highs_run(highs)
