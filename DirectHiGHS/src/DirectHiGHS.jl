@@ -155,10 +155,6 @@ function solve_sparse_lp()
     Highs_destroy(highs)
 end
 
-println("Solving non-sparse LP:")
-# solve_lp()
-solve_sparse_lp()
-
 function solve_moi_lp()
     optimizer = HiGHS.Optimizer()
     MOI.set(optimizer, MOI.Silent(), true)
@@ -178,10 +174,12 @@ function solve_moi_lp()
                [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0])
 
     x = MOI.add_variables(optimizer, num_col)
+    lower_constraints = MOI.ConstraintIndex{MOI.VariableIndex, MOI.GreaterThan{Float64}}[]
+    upper_constraints = MOI.ConstraintIndex{MOI.VariableIndex, MOI.LessThan{Float64}}[]
     for i in 1:num_col
-        MOI.add_constraint(optimizer, x[i], MOI.GreaterThan(col_lower[i]))
+        push!(lower_constraints, MOI.add_constraint(optimizer, x[i], MOI.GreaterThan(col_lower[i])))
         if col_upper[i] < Inf
-            MOI.add_constraint(optimizer, x[i], MOI.LessThan(col_upper[i]))
+            push!(upper_constraints, MOI.add_constraint(optimizer, x[i], MOI.LessThan(col_upper[i])))
         end
     end
 
@@ -212,8 +210,37 @@ function solve_moi_lp()
     for i in 1:num_col
         println("x[$i] = ", col_value[i])
     end
+
+    # Modify the problem
+    new_costs = col_cost .+ rand(num_col) .* 2.0
+    MOI.set(optimizer, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}(),
+            MOI.ScalarAffineFunction(MOI.ScalarAffineTerm.(new_costs, x), 0.0))
+
+    new_lower = col_lower .+ rand(num_col) .* 0.5
+    for i in 1:num_col
+        MOI.set(optimizer, MOI.ConstraintSet(), lower_constraints[i], MOI.GreaterThan(new_lower[i]))
+    end
+    # We are not modifying the upper bounds in this example, but this is how you would do it:
+    # new_upper = col_upper .+ rand(num_col) .* 0.5
+    # for i in 1:length(upper_constraints)
+    #     MOI.set(optimizer, MOI.ConstraintSet(), upper_constraints[i], MOI.LessThan(new_upper[i]))
+    # end
+
+    MOI.optimize!(optimizer)
+
+    col_value = MOI.get(optimizer, MOI.VariablePrimal(), x)
+
+    println("\nModified MOI LP solution:")
+    for i in 1:num_col
+        println("x[$i] = ", col_value[i])
+    end
 end
 
+println("Solving non-sparse LP:")
+solve_lp()
+println("\nSolving sparse LP with C API:")
+solve_sparse_lp()
+println("\nSolving sparse LP with MOI:")
 solve_moi_lp()
 
 end # module
